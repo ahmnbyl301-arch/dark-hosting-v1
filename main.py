@@ -322,5 +322,4 @@ init_db()
 
 if __name__ == "__main__":
     print(f"Ellipi running on http://0.0.0.0:{PORT}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
-
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
