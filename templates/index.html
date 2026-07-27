@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellipi Messenger</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .auth-container, .chat-container {
+            width: 100%;
+            max-width: 480px;
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #38bdf8;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background-color: #0f172a;
+            color: #fff;
+            outline: none;
+            font-size: 15px;
+        }
+
+        input:focus {
+            border-color: #38bdf8;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background-color: #0284c7;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #0369a1;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .chat-box {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+            background-color: #0f172a;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .message {
+            background-color: #334155;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-break: break-word;
+        }
+
+        .message .username {
+            font-size: 12px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin-bottom: 4px;
+        }
+
+        .chat-inputs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-inputs input {
+            flex: 1;
+        }
+
+        .chat-inputs button {
+            width: auto;
+            margin-top: 0;
+            padding: 0 20px;
+        }
+
+        .switch-auth {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+
+        .switch-auth span {
+            color: #38bdf8;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- واجهة تسجيل الدخول / إنشاء حساب -->
+    <div id="authContainer" class="auth-container">
+        <h2 id="authTitle">تسجيل الدخول</h2>
+        <div class="form-group">
+            <label>اسم المستخدم</label>
+            <input type="text" id="usernameInput" placeholder="أدخل اسم المستخدم">
+        </div>
+        <div class="form-group">
+            <label>كلمة المرور</label>
+            <input type="password" id="passwordInput" placeholder="أدخل كلمة المرور">
+        </div>
+        <button id="authBtn" onclick="handleAuth()">دخول</button>
+        <div class="switch-auth" onclick="toggleAuthMode()">
+            <p id="switchText">ليس لديك حساب؟ <span>أنشئ حساباً الآن</span></p>
+        </div>
+    </div>
+
+    <!-- واجهة المحادثة الرئيسية -->
+    <div id="chatContainer" class="chat-container hidden">
+        <h2>Ellipi Chat</h2>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="chat-inputs">
+            <input type="text" id="messageInput" placeholder="اكتب رسالتك هنا..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">إرسال</button>
+        </div>
+    </div>
+
+    <script>
+        let isLogin = true;
+        let socket;
+
+        function toggleAuthMode() {
+            isLogin = !isLogin;
+            document.getElementById('authTitle').innerText = isLogin ? 'تسجيل الدخول' : 'حساب جديد';
+            document.getElementById('authBtn').innerText = isLogin ? 'دخول' : 'تسجيل';
+            document.getElementById('switchText').innerHTML = isLogin ? 
+                'ليس لديك حساب؟ <span>أنشئ حساباً الآن</span>' : 
+                'لديك حساب بالفعل؟ <span>سجل الدخول</span>';
+        }
+
+        async function handleAuth() {
+            const username = document.getElementById('usernameInput').value;
+            const password = document.getElementById('passwordInput').value;
+
+            if (!username || !password) {
+                alert('يرجى ملء جميع الحقول');
+                return;
+            }
+
+            const endpoint = isLogin ? '/login' : '/register';
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    initChat();
+                } else {
+                    alert(data.error || 'حدث خطأ أثناء الاتصال');
+                }
+            } catch (err) {
+                alert('فشل الاتصال بالسيرفر');
+            }
+        }
+
+        function initChat() {
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('chatContainer').classList.remove('hidden');
+
+            socket = io();
+
+            socket.on('new_message', (data) => {
+                const chatBox = document.getElementById('chatBox');
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'message';
+                msgDiv.innerHTML = `<div class="username">${data.username}</div><div>${data.content}</div>`;
+                chatBox.appendChild(msgDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+
+            socket.emit('join_room', { room_id: 1 });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            if (content && socket) {
+                socket.emit('send_message', { content: content });
+                input.value = '';
+            }
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+    </script>
+</body>
+</html>
+
